@@ -1,3 +1,4 @@
+# Rides & Bites: Analyzing User Trends and Peak-Time Demand With SQL
 ## Project Details
 The objective of the analysis is to derive key insights into user behavior, peak-time patterns, and operational efficiency using advanced SQL techniques such as window functions, partitioning, and aggregations. By exploring these facets, the project aims to provide valuable business insights that can help optimize operational strategies, identify top-performing users and drivers, and improve service delivery.
 
