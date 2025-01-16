@@ -317,6 +317,7 @@ LIMIT 1;
 SELECT driver_id, name, rating
 FROM drivers
 WHERE rating < (SELECT AVG(rating) FROM drivers);
+```
 ## Food Orders Dataset Queries
 ### 15. Calculate the total revenue generated from completed orders.
 ```sql
