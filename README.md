@@ -412,7 +412,9 @@ GROUP BY cuisine_type;
 ```sql
 SELECT 
     (SELECT SUM(fare_amount) FROM rides WHERE ride_status = 'Completed') +
-    (SELECT SUM(total_price + delivery_fee) FROM food_orders WHERE order_status = 'Completed') AS total_revenue;
+    (SELECT SUM(total_price + delivery_fee)
+FROM food_orders
+WHERE order_status = 'Completed') AS total_revenue;
 ```
 ### 27. Identify the top 3 users with the highest combined spending on rides and food orders.
 ```sql
