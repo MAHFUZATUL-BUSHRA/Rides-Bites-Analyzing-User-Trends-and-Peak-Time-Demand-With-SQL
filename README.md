@@ -46,6 +46,45 @@ This project leverages PostgreSQL to perform complex data manipulations and anal
  *  Ensuring that data was accurate and consistent across both the rides and food orders tables.
  #### Performance Optimization:
  * Writing efficient queries for large datasets and optimizing queries involving window functions and rolling window aggregations.
+### Tables Create 
+```sql
+CREATE SCHEMA IF NOT EXISTS project1
+    AUTHORIZATION postgres;
+	
+CREATE TABLE food_orders (
+    order_id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL,
+    restaurant_id INT NOT NULL,
+    order_date_time TIMESTAMP NOT NULL,
+    order_status VARCHAR(50) CHECK (order_status IN ('Completed', 'Canceled', 'Refunded')) NOT NULL,
+    total_price DECIMAL(10, 2) NOT NULL,
+    delivery_fee DECIMAL(10, 2) NOT NULL
+);
+CREATE TABLE drivers (
+    driver_id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    rating DECIMAL(2, 1) CHECK (rating BETWEEN 1 AND 5),
+    vehicle_type VARCHAR(50) CHECK (vehicle_type IN ('Car', 'Bike')) NOT NULL
+);
+CREATE TABLE rides (
+    ride_id SERIAL PRIMARY KEY,
+    driver_id INT NOT NULL,
+    user_id INT NOT NULL,
+    pickup_location VARCHAR(100) NOT NULL,
+    dropoff_location VARCHAR(100) NOT NULL,
+    distance_km DECIMAL(5, 2) NOT NULL,
+    fare_amount DECIMAL(10, 2) NOT NULL,
+    ride_status VARCHAR(50) CHECK (ride_status IN ('Completed', 'Canceled')) NOT NULL,
+    ride_date_time TIMESTAMP NOT NULL
+);
+CREATE TABLE restaurants (
+    restaurant_id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    cuisine_type VARCHAR(50) NOT NULL,
+    location VARCHAR(100) NOT NULL,
+    rating DECIMAL(3, 1) CHECK (rating >= 0 AND rating <= 5) NOT NULL
+);
+```
 ## Rides Dataset Queries
 ### 1. Retrieve the total revenue generated from completed rides.
 ```sql
@@ -104,7 +143,8 @@ SELECT driver_id, COUNT(*) AS ride_count
 FROM rides
 WHERE ride_status = 'Completed'
 GROUP BY driver_id
-HAVING ride_count > 10;
+HAVING COUNT(*) > 10;
+
 ```
 ### 9. Calculate the average driver rating grouped by vehicle type.
 ```sql
@@ -126,7 +166,8 @@ SELECT driver_id, AVG(fare_amount) AS avg_fare
 FROM rides
 WHERE ride_status = 'Completed'
 GROUP BY driver_id
-HAVING avg_fare > 300;
+HAVING AVG(fare_amount) > 300;
+
 ```
 ### 12. Determine the percentage of canceled rides.
 ```sql
@@ -150,22 +191,25 @@ WHERE rating < (SELECT AVG(rating) FROM drivers);
 ## Food Orders Dataset Queries
 ### 15. Calculate the total revenue generated from completed orders.
 ```sql
-SELECT SUM(total_price + delivery_fee) AS total_revenue
-FROM orders
+SELECT SUM(COALESCE(total_price, 0) + COALESCE(delivery_fee, 0)) AS total_revenue
+FROM food_orders
 WHERE order_status = 'Completed';
+
 ```
 ### 16. Find the top 5 users who placed the most orders.
 ```sql
+
 SELECT user_id, COUNT(*) AS total_orders
-FROM orders
+FROM food_orders
 GROUP BY user_id
 ORDER BY total_orders DESC
 LIMIT 5;
+
 ```
 ### 17. List the restaurants with the highest average order value.
 ```sql
 SELECT restaurant_id, AVG(total_price) AS avg_order_value
-FROM orders
+FROM food_orders
 WHERE order_status = 'Completed'
 GROUP BY restaurant_id
 ORDER BY avg_order_value DESC
@@ -174,7 +218,7 @@ LIMIT 3;
 ### 18. Identify the user who paid the most delivery fees.
 ```sql
 SELECT user_id, SUM(delivery_fee) AS total_delivery_fee
-FROM orders
+FROM food_orders
 GROUP BY user_id
 ORDER BY total_delivery_fee DESC
 LIMIT 1;
@@ -183,12 +227,12 @@ LIMIT 1;
 ```sql
 SELECT 
     (COUNT(*) FILTER (WHERE order_status = 'Refunded') * 100.0 / COUNT(*)) AS refund_rate
-FROM orders;
+FROM food_orders;
 ```
 ### 20. Find the restaurant with the most canceled orders.
 ```sql
 SELECT restaurant_id, COUNT(*) AS canceled_orders
-FROM orders
+FROM food_orders
 WHERE order_status = 'Canceled'
 GROUP BY restaurant_id
 ORDER BY canceled_orders DESC
@@ -197,7 +241,7 @@ LIMIT 1;
 ### 21. Retrieve the most frequently ordered cuisine type.
 ```sql
 SELECT r.cuisine_type, COUNT(o.order_id) AS order_count
-FROM orders o
+FROM food_orders o
 JOIN restaurants r ON o.restaurant_id = r.restaurant_id
 GROUP BY r.cuisine_type
 ORDER BY order_count DESC
@@ -206,13 +250,13 @@ LIMIT 1;
 ### 22. Calculate the average total order price (including delivery fees).
 ```sql
 SELECT AVG(total_price + delivery_fee) AS avg_order_price
-FROM orders
+FROM food_orders
 WHERE order_status = 'Completed';
 ```
 ### 23. Identify users with total spending above 2000.
 ```sql
 SELECT user_id, SUM(total_price + delivery_fee) AS total_spending
-FROM orders
+FROM food_orders
 WHERE order_status = 'Completed'
 GROUP BY user_id
 HAVING total_spending > 2000;
@@ -220,7 +264,7 @@ HAVING total_spending > 2000;
 ### 24. List the top 5 restaurants by total revenue.
 ```sql
 SELECT r.restaurant_id, r.name, SUM(o.total_price + o.delivery_fee) AS total_revenue
-FROM orders o
+FROM food_orders o
 JOIN restaurants r ON o.restaurant_id = r.restaurant_id
 WHERE o.order_status = 'Completed'
 GROUP BY r.restaurant_id, r.name
@@ -239,7 +283,7 @@ GROUP BY cuisine_type;
 ```sql
 SELECT 
     (SELECT SUM(fare_amount) FROM rides WHERE ride_status = 'Completed') +
-    (SELECT SUM(total_price + delivery_fee) FROM orders WHERE order_status = 'Completed') AS total_revenue;
+    (SELECT SUM(total_price + delivery_fee) FROM food_orders WHERE order_status = 'Completed') AS total_revenue;
 ```
 ### 27. Identify the top 3 users with the highest combined spending on rides and food orders.
 ```sql
@@ -251,7 +295,7 @@ FROM (
     GROUP BY user_id
     UNION ALL
     SELECT user_id, SUM(total_price + delivery_fee) AS total_spent
-    FROM orders
+    FROM food_orders
     WHERE order_status = 'Completed'
     GROUP BY user_id
 ) t
@@ -263,13 +307,23 @@ LIMIT 3;
 ```sql
 SELECT DISTINCT r.user_id
 FROM rides r
-JOIN orders o ON r.user_id = o.user_id;
+JOIN food_orders o ON r.user_id = o.user_id;
 ```
 ### 29. Retrieve the restaurant and driver with the highest combined revenue.
 ```sql
 SELECT 
-    (SELECT driver_id FROM rides GROUP BY driver_id ORDER BY SUM(fare_amount) DESC LIMIT 1) AS top_driver,
-    (SELECT restaurant_id FROM orders GROUP BY restaurant_id ORDER BY SUM(total_price + de
+    (SELECT driver_id 
+     FROM rides 
+     WHERE ride_status = 'Completed'
+     GROUP BY driver_id 
+     ORDER BY SUM(fare_amount) DESC 
+     LIMIT 1) AS top_driver,
+    (SELECT restaurant_id 
+     FROM food_orders 
+     WHERE order_status = 'Completed'
+     GROUP BY restaurant_id 
+     ORDER BY SUM(total_price + delivery_fee) DESC 
+     LIMIT 1) AS top_restaurant;
 ```
 ## User Behavior Queries
 ### 1. Rank users by total spending (rides + orders) in descending order using window functions.
@@ -281,7 +335,7 @@ WITH user_spending AS (
     GROUP BY user_id
     UNION ALL
     SELECT user_id, SUM(total_price + delivery_fee) AS total_spent
-    FROM orders
+    FROM food_orders
     WHERE order_status = 'Completed'
     GROUP BY user_id
 )
@@ -292,17 +346,24 @@ FROM user_spending;
 ### 2. Identify the average spending per user and find users who are top 20% highest spenders.
 ```sql
 WITH user_avg_spending AS (
-    SELECT user_id, AVG(fare_amount) AS avg_ride_spend, 
-           AVG(total_price + delivery_fee) AS avg_food_spend
+    SELECT rides.user_id, 
+           AVG(rides.fare_amount) AS avg_ride_spend, 
+           AVG(food_orders.total_price + food_orders.delivery_fee) AS avg_food_spend
     FROM rides
-    LEFT JOIN orders ON rides.user_id = orders.user_id
-    WHERE ride_status = 'Completed' AND order_status = 'Completed'
-    GROUP BY user_id
+    LEFT JOIN food_orders ON rides.user_id = food_orders.user_id
+    WHERE rides.ride_status = 'Completed' AND food_orders.order_status = 'Completed'
+    GROUP BY rides.user_id
+),
+percentile_threshold AS (
+    SELECT PERCENTILE_CONT(0.8) WITHIN GROUP (ORDER BY avg_ride_spend + avg_food_spend) AS threshold
+    FROM user_avg_spending
 )
-SELECT user_id, (avg_ride_spend + avg_food_spend) AS total_avg_spending
+SELECT user_avg_spending.user_id, 
+       (avg_ride_spend + avg_food_spend) AS total_avg_spending
 FROM user_avg_spending
-WHERE (avg_ride_spend + avg_food_spend) > 
-      (SELECT PERCENTILE_CONT(0.8) WITHIN GROUP (ORDER BY avg_ride_spend + avg_food_spend) FROM user_avg_spending);
+JOIN percentile_threshold ON TRUE
+WHERE (avg_ride_spend + avg_food_spend) > percentile_threshold.threshold;
+
 ```
 ### 3. Track the most frequent order category (e.g., rides or food) for each user.
 ```sql
@@ -313,21 +374,26 @@ WITH user_order_types AS (
     GROUP BY user_id
     UNION ALL
     SELECT user_id, 'Food' AS order_type, COUNT(*) AS order_count
-    FROM orders
+    FROM food_orders
     WHERE order_status = 'Completed'
     GROUP BY user_id
+),
+ranked_orders AS (
+    SELECT user_id, order_type, order_count,
+           RANK() OVER (PARTITION BY user_id ORDER BY order_count DESC) AS frequency_rank
+    FROM user_order_types
 )
-SELECT user_id, order_type, order_count,
-       RANK() OVER (PARTITION BY user_id ORDER BY order_count DESC) AS frequency_rank
-FROM user_order_types
+SELECT user_id, order_type, order_count, frequency_rank
+FROM ranked_orders
 WHERE frequency_rank = 1;
+
 ```
 ### 4. Calculate the cumulative total spending by users over time.
 ```sql
 WITH cumulative_spending AS (
-    SELECT user_id, (fare_amount + total_price + delivery_fee) AS total_spending, ride_date_time
+    SELECT rides.user_id, (fare_amount + total_price + delivery_fee) AS total_spending, ride_date_time
     FROM rides
-    LEFT JOIN orders ON rides.user_id = orders.user_id
+    LEFT JOIN food_orders ON rides.user_id = food_orders.user_id
     WHERE ride_status = 'Completed' AND order_status = 'Completed'
 )
 SELECT user_id, ride_date_time, 
@@ -348,7 +414,7 @@ LIMIT 1;
 ```sql
 SELECT EXTRACT(HOUR FROM order_date_time) AS hour_of_day, 
        AVG(total_price + delivery_fee) AS avg_order_value
-FROM orders
+FROM food_orders
 WHERE order_status = 'Completed'
 GROUP BY hour_of_day
 ORDER BY hour_of_day;
@@ -356,13 +422,13 @@ ORDER BY hour_of_day;
 ### 7. Find the busiest days for rides and food orders combined by counting completed activities (rides and orders) per day.
 ```sql
 WITH combined_activity AS (
-    SELECT DATE(ride_date_time) AS activity_date, COUNT(*) AS completed_rides
+    SELECT DATE(ride_date_time) AS activity_date, COUNT(*) AS completed_rides, 0 AS completed_orders
     FROM rides
     WHERE ride_status = 'Completed'
     GROUP BY activity_date
     UNION ALL
-    SELECT DATE(order_date_time) AS activity_date, COUNT(*) AS completed_orders
-    FROM orders
+    SELECT DATE(order_date_time) AS activity_date, 0 AS completed_rides, COUNT(*) AS completed_orders
+    FROM food_orders
     WHERE order_status = 'Completed'
     GROUP BY activity_date
 )
@@ -371,6 +437,7 @@ FROM combined_activity
 GROUP BY activity_date
 ORDER BY total_activities DESC
 LIMIT 1;
+
 ```
 ### 8. Analyze the average time spent per ride during peak hours (top 3 busiest hours).
 ```sql
@@ -382,7 +449,7 @@ WITH peak_hours AS (
     ORDER BY completed_rides DESC
     LIMIT 3
 )
-SELECT hour_of_day, AVG(EXTRACT(MINUTE FROM ride_date_time)) AS avg_minutes_per_ride
+SELECT EXTRACT(HOUR FROM ride_date_time) AS hour_of_day, AVG(EXTRACT(MINUTE FROM ride_date_time)) AS avg_minutes_per_ride
 FROM rides
 WHERE EXTRACT(HOUR FROM ride_date_time) IN (SELECT hour_of_day FROM peak_hours)
 GROUP BY hour_of_day;
@@ -391,16 +458,23 @@ GROUP BY hour_of_day;
 ```sql
 WITH peak_days AS (
     SELECT DATE(order_date_time) AS activity_date, COUNT(*) AS completed_orders
-    FROM orders
+    FROM food_orders
     WHERE order_status = 'Completed'
     GROUP BY activity_date
     ORDER BY completed_orders DESC
     LIMIT 3
+),
+order_times AS (
+    SELECT user_id,
+           DATE(order_date_time) AS activity_date,
+           EXTRACT(MINUTE FROM order_date_time - LAG(order_date_time) OVER (PARTITION BY user_id ORDER BY order_date_time)) AS processing_time
+    FROM food_orders
+    WHERE DATE(order_date_time) IN (SELECT activity_date FROM peak_days)
 )
-SELECT activity_date, AVG(EXTRACT(MINUTE FROM order_date_time - LAG(order_date_time) OVER (PARTITION BY user_id ORDER BY order_date_time))) AS avg_order_processing_time
-FROM orders
-WHERE DATE(order_date_time) IN (SELECT activity_date FROM peak_days)
+SELECT activity_date, AVG(processing_time) AS avg_order_processing_time
+FROM order_times
 GROUP BY activity_date;
+
 ```
 ### 10. Track the number of rides and orders in each month (rolling window of 3 months).
 ```sql
@@ -414,7 +488,7 @@ FROM (
     GROUP BY activity_month
     UNION ALL
     SELECT TO_CHAR(order_date_time, 'YYYY-MM') AS activity_month, 0 AS ride_count, COUNT(*) AS order_count
-    FROM orders
+    FROM food_orders
     WHERE order_status = 'Completed'
     GROUP BY activity_month
 ) activity_data
@@ -438,10 +512,14 @@ LIMIT 5;
 ```
 ### 12. Find the average time between order placement and delivery for each restaurant.
 ```sql
-SELECT restaurant_id, 
-       AVG(EXTRACT(MINUTE FROM (order_date_time - LAG(order_date_time) OVER (PARTITION BY restaurant_id ORDER BY order_date_time)))) AS avg_delivery_time
-FROM orders
-WHERE order_status = 'Completed'
+WITH order_times AS (
+    SELECT restaurant_id,
+           EXTRACT(MINUTE FROM (order_date_time - LAG(order_date_time) OVER (PARTITION BY restaurant_id ORDER BY order_date_time))) AS delivery_time
+    FROM food_orders
+    WHERE order_status = 'Completed'
+)
+SELECT restaurant_id, AVG(delivery_time) AS avg_delivery_time
+FROM order_times
 GROUP BY restaurant_id;
 ```
 ### 13. Analyze the number of orders completed and canceled by restaurant over a rolling 30-day window.
@@ -451,7 +529,7 @@ SELECT restaurant_id, activity_date,
        SUM(CASE WHEN order_status = 'Canceled' THEN 1 ELSE 0 END) OVER (PARTITION BY restaurant_id ORDER BY activity_date ROWS BETWEEN 29 PRECEDING AND CURRENT ROW) AS canceled_orders
 FROM (
     SELECT restaurant_id, DATE(order_date_time) AS activity_date, order_status
-    FROM orders
+    FROM food_orders
 ) order_activity
 ORDER BY restaurant_id, activity_date;
 ```
@@ -461,7 +539,7 @@ WITH restaurant_efficiency AS (
     SELECT restaurant_id,
            COUNT(CASE WHEN order_status = 'Completed' THEN 1 END) AS completed_orders,
            COUNT(CASE WHEN order_status = 'Canceled' THEN 1 END) AS canceled_orders
-    FROM orders
+    FROM food_orders
     GROUP BY restaurant_id
 )
 SELECT restaurant_id, 
@@ -469,4 +547,5 @@ SELECT restaurant_id,
 FROM restaurant_efficiency
 ORDER BY efficiency_ratio DESC
 LIMIT 3;
+
 ```
