@@ -85,6 +85,135 @@ CREATE TABLE restaurants (
     rating DECIMAL(3, 1) CHECK (rating >= 0 AND rating <= 5) NOT NULL
 );
 ```
+## Basic Queries
+### 1. Total Revenue by Restaurant
+```sql
+SELECT restaurant_id, 
+       SUM(total_price + delivery_fee) AS total_revenue
+FROM food_orders
+WHERE order_status = 'Completed'
+GROUP BY restaurant_id;
+```
+### 2. Total Completed Rides for Each User
+```sql
+SELECT user_id, COUNT(*) AS completed_rides
+FROM rides
+WHERE ride_status = 'Completed'
+GROUP BY user_id;
+```
+### 3. Average Order Value by User
+```sql
+SELECT user_id, 
+       AVG(total_price + delivery_fee) AS avg_order_value
+FROM food_orders
+WHERE order_status = 'Completed'
+GROUP BY user_id;
+```
+### 4. Top 5 Users with the Most Completed Orders
+```sql
+SELECT user_id, COUNT(*) AS completed_orders
+FROM food_orders
+WHERE order_status = 'Completed'
+GROUP BY user_id
+ORDER BY completed_orders DESC
+LIMIT 5;
+```
+### 5. Users Who Have Made Both Food Orders and Completed Rides
+```sql
+SELECT DISTINCT food_orders.user_id
+FROM food_orders
+JOIN rides ON food_orders.user_id = rides.user_id
+WHERE food_orders.order_status = 'Completed' 
+  AND rides.ride_status = 'Completed';
+```
+### 6. Peak Order Times for Each Restaurant
+```sql
+
+SELECT restaurant_id, 
+       EXTRACT(HOUR FROM order_date_time) AS order_hour, 
+       COUNT(*) AS order_count
+FROM food_orders
+WHERE order_status = 'Completed'
+GROUP BY restaurant_id, order_hour
+ORDER BY order_count DESC;
+```
+### 7. Top 3 Restaurants with the Highest Revenue in a Given Month
+```sql
+SELECT restaurant_id, 
+       SUM(total_price + delivery_fee) AS total_revenue
+FROM food_orders
+WHERE order_status = 'Completed'
+  AND EXTRACT(MONTH FROM order_date_time) = 1
+  AND EXTRACT(YEAR FROM order_date_time) = 2025
+GROUP BY restaurant_id
+ORDER BY total_revenue DESC
+LIMIT 3;
+```
+### 8. Order Frequency on Weekdays vs. Weekends
+```sql
+SELECT restaurant_id,
+       CASE 
+           WHEN EXTRACT(DOW FROM order_date_time) IN (0, 6) THEN 'Weekend'
+           ELSE 'Weekday'
+       END AS order_type,
+       COUNT(*) AS order_count
+FROM food_orders
+WHERE order_status = 'Completed'
+GROUP BY restaurant_id, order_type;
+```
+### 9. Daily Revenue for Each Restaurant
+```sql
+SELECT restaurant_id, 
+       DATE(order_date_time) AS order_date, 
+       SUM(total_price + delivery_fee) AS daily_revenue
+FROM food_orders
+WHERE order_status = 'Completed'
+GROUP BY restaurant_id, order_date
+ORDER BY order_date DESC;
+```
+### 10. Average Time Between Consecutive Orders for Each User
+```sql
+WITH order_times AS (
+    SELECT user_id,
+           EXTRACT(MINUTE FROM (order_date_time - LAG(order_date_time) OVER (PARTITION BY user_id ORDER BY order_date_time))) AS time_diff
+    FROM food_orders
+    WHERE order_status = 'Completed'
+)
+SELECT user_id, round(AVG(time_diff),1) AS avg_time_between_orders
+FROM order_times
+GROUP BY user_id;
+```
+### 11. Top 3 Users Who Have Spent the Most on Rides and Food Orders
+```sql
+SELECT rides.user_id, 
+       SUM(fare_amount) + SUM(total_price + delivery_fee) AS total_spent
+FROM rides
+JOIN food_orders ON rides.user_id = food_orders.user_id
+WHERE ride_status = 'Completed' AND order_status = 'Completed'
+GROUP BY rides.user_id
+ORDER BY total_spent DESC
+LIMIT 3;
+```
+### 12. Users Who Have Placed Orders More Than 3 Times in a Week
+```sql
+SELECT user_id, 
+       COUNT(*) AS order_count,
+       EXTRACT(WEEK FROM order_date_time) AS order_week
+FROM food_orders
+WHERE order_status = 'Completed'
+GROUP BY user_id, order_week
+HAVING COUNT(*) > 3;
+```
+### 13. Day of Week with the Highest Average Ride Spending
+```sql
+SELECT EXTRACT(DOW FROM ride_date_time) AS day_of_week,
+       AVG(fare_amount) AS avg_ride_spending
+FROM rides
+WHERE ride_status = 'Completed'
+GROUP BY day_of_week
+ORDER BY avg_ride_spending DESC
+LIMIT 1;
+```
 ## Rides Dataset Queries
 ### 1. Retrieve the total revenue generated from completed rides.
 ```sql
